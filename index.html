@@ -14,25 +14,29 @@
 <div class="container">
   <h2>Mastermind Solver</h2>
   <p>Range: <b>1–9</b>, Pegs: <b>3</b>, No duplicates.</p>
-  
+
   <div id="play-area">
     <div id="cur-guess" class="guess-box"></div>
 
+    <div class="form-inline mb-3">
+      <label class="mr-2">Override guess (e.g. 1,4,7):</label>
+      <input type="text" id="overrideGuess" class="form-control mr-3" placeholder="leave blank for auto">
+      <button id="submitFeedback" class="btn btn-primary">Next</button>
+    </div>
+
     <div id="feedback" class="form-inline mb-3">
-      <label class="mr-2">Right number, right place (@):</label>
+      <label class="mr-2">@ (Right place):</label>
       <input type="number" id="bothCorrect" min="0" max="3" value="0" class="form-control mr-3" style="width:80px;">
       
-      <label class="mr-2">Right number, wrong place (#):</label>
+      <label class="mr-2"># (Wrong place):</label>
       <input type="number" id="colorCorrect" min="0" max="3" value="0" class="form-control mr-3" style="width:80px;">
-      
-      <button id="submitFeedback" class="btn btn-primary">Submit</button>
     </div>
 
     <div id="old-guesses-table" style="display:none;">
       <h4>History</h4>
       <table class="table table-striped">
         <thead>
-          <tr><th>Guess</th><th>@ (Right Place)</th><th># (Wrong Place)</th></tr>
+          <tr><th>Guess</th><th>@</th><th>#</th></tr>
         </thead>
         <tbody id="old-guesses"></tbody>
       </table>
@@ -47,145 +51,85 @@
 </div>
 
 <script>
-<script type="text/javascript">
-$(function() {
-  'use strict';
-
+(function(){
   const digits = ["1","2","3","4","5","6","7","8","9"];
   const numPegs = 3;
 
-  // all possible codes (permutation without replacement)
-  function generateCandidates() {
-    let out = [];
-    for (let i = 0; i < 9; i++) {
-      for (let j = 0; j < 9; j++) {
-        if (j === i) continue;
-        for (let k = 0; k < 9; k++) {
-          if (k === i || k === j) continue;
-          out.push([digits[i], digits[j], digits[k]]);
-        }
-      }
-    }
-    return out;
+  // Generate all permutations of 3 distinct digits
+  function generateAllGuesses(arr, length) {
+    if (length === 1) return arr.map(d => [d]);
+    const results = [];
+    arr.forEach((d,i) => {
+      const remaining = arr.filter((_,j)=>j!==i);
+      generateAllGuesses(remaining, length-1).forEach(suffix=>{
+        results.push([d,...suffix]);
+      });
+    });
+    return results;
   }
+  let possibleGuesses = generateAllGuesses(digits,numPegs);
 
-  // judge guess vs secret-like (feedback)
-  function judge(answer, guess) {
+  function judgeGuess(answer, guess){
     let both = 0, color = 0;
-    let aLeft = [], gLeft = [];
-    for (let i = 0; i < numPegs; i++) {
-      if (answer[i] === guess[i]) both++;
-      else {
-        aLeft.push(answer[i]);
-        gLeft.push(guess[i]);
+    let remAns=[], remGuess=[];
+    for(let i=0;i<answer.length;i++){
+      if(answer[i]===guess[i]) both++;
+      else { remAns.push(answer[i]); remGuess.push(guess[i]); }
+    }
+    remAns.forEach(a=>{
+      const idx=remGuess.indexOf(a);
+      if(idx!==-1){ color++; remGuess.splice(idx,1); }
+    });
+    return {bothCorrect:both,colorCorrect:color};
+  }
+
+  function filterGuesses(evidence){
+    return possibleGuesses.filter(g=>{
+      return evidence.every(ev=>{
+        const j = judgeGuess(g, ev.guess);
+        return j.bothCorrect===ev.bothCorrect && j.colorCorrect===ev.colorCorrect;
+      });
+    });
+  }
+
+  function showGuess(guess){
+    document.getElementById("cur-guess").textContent = "Is it maybe " + guess.join(", ") + "?";
+  }
+
+  let evidence = [];
+  let currentGuess = possibleGuesses[Math.floor(Math.random()*possibleGuesses.length)];
+  showGuess(currentGuess);
+
+  document.getElementById("submitFeedback").onclick = ()=>{
+    const both = parseInt(document.getElementById("bothCorrect").value,10);
+    const color = parseInt(document.getElementById("colorCorrect").value,10);
+    const override = document.getElementById("overrideGuess").value.trim();
+    
+    evidence.push({guess: currentGuess, bothCorrect: both, colorCorrect: color});
+    document.getElementById("old-guesses-table").style.display="block";
+    document.getElementById("old-guesses").innerHTML += 
+      `<tr><td>${currentGuess.join(", ")}</td><td>${both}</td><td>${color}</td></tr>`;
+    
+    if(both===numPegs){
+      document.getElementById("success").style.display="block";
+      return;
+    }
+    // filter possible guesses
+    possibleGuesses = filterGuesses(evidence);
+
+    if(override){
+      currentGuess = override.split(",").map(x=>x.trim());
+    }else{
+      if(possibleGuesses.length===0){
+        document.getElementById("error").style.display="block";
+        document.getElementById("error").textContent="❌ No possible guesses left. Check inputs.";
+        return;
       }
+      currentGuess = possibleGuesses[Math.floor(Math.random()*possibleGuesses.length)];
     }
-    gLeft.forEach(g => {
-      let idx = aLeft.indexOf(g);
-      if (idx !== -1) {
-        color++;
-        aLeft.splice(idx,1);
-      }
-    });
-    return {bothCorrect: both, colorCorrect: color};
-  }
-
-  // check if candidate consistent with all feedback
-  function validCandidate(code, evidences) {
-    return evidences.every(ev => {
-      let j = judge(code, ev.guess);
-      return j.bothCorrect === ev.bothCorrect && j.colorCorrect === ev.colorCorrect;
-    });
-  }
-
-  // pick next guess
-  function nextGuess(evidences, candidates) {
-    // fixed first 3 probes
-    if (evidences.length === 0) return ["1","2","3"];
-    if (evidences.length === 1) return ["4","5","6"];
-    if (evidences.length === 2) return ["7","8","9"];
-    // else pick first valid candidate
-    return candidates[0];
-  }
-
-  // UI references
-  const $curGuess = $('#cur-guess');
-  const $oldGuesses = $('#old-guesses');
-  const $oldGuessesTable = $('#old-guesses-table');
-  const $success = $('#success');
-
-  let candidates = generateCandidates();
-  let evidences = [];
-
-  function renderGuess(guess) {
-    const symbols = {"none":"☆", "colorCorrect":"⚪", "bothCorrect":"⚫"};
-    let html = `
-      <div class="guess h5">Is it maybe <b>${guess.join("")}</b>?</div>
-      <div class="feedback">`;
-    for (let i = 0; i < numPegs; i++) {
-      html += `<span class="peg" data-state="none">${symbols.none}</span> `;
-    }
-    html += `<button class="btn btn-primary next">Next</button></div>`;
-    $curGuess.html(html);
-    $curGuess.find('.guess').data('guess', guess);
-  }
-
-  function update() {
-    // filter candidates
-    candidates = candidates.filter(c => validCandidate(c, evidences));
-    if (candidates.length === 0) {
-      $curGuess.html(`<div class="alert alert-danger">No possible codes! Check feedback.</div>`);
-      return;
-    }
-    if (candidates.length === 1) {
-      renderGuess(candidates[0]);
-      return;
-    }
-    renderGuess(nextGuess(evidences, candidates));
-  }
-
-  // start game
-  function start() {
-    evidences = [];
-    candidates = generateCandidates();
-    $oldGuesses.empty();
-    $oldGuessesTable.hide();
-    $success.hide();
-    update();
-  }
-
-  // click peg to cycle
-  $curGuess.on('click', '.peg', function() {
-    const states = ["none","colorCorrect","bothCorrect"];
-    const symbols = {"none":"☆", "colorCorrect":"⚪", "bothCorrect":"⚫"};
-    let cur = $(this).data('state');
-    let next = states[(states.indexOf(cur)+1)%3];
-    $(this).data('state', next).text(symbols[next]);
-  });
-
-  // press Next
-  $curGuess.on('click', '.next', function() {
-    let guess = $curGuess.find('.guess').data('guess');
-    let both=0, color=0;
-    $curGuess.find('.peg').each(function(){
-      if ($(this).data('state')==="bothCorrect") both++;
-      else if ($(this).data('state')==="colorCorrect") color++;
-    });
-    if (both === numPegs) {
-      $success.show();
-      return;
-    }
-    evidences.push({guess: guess, bothCorrect: both, colorCorrect: color});
-    $oldGuessesTable.show();
-    $oldGuesses.append(`<tr><td>${guess.join("")}</td><td>${both}</td><td>${color}</td></tr>`);
-    update();
-  });
-
-  // init
-  start();
-});
-</script>
+    showGuess(currentGuess);
+  };
+})();
 </script>
 </body>
 </html>
- 
