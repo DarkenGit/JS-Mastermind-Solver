@@ -1,213 +1,324 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Mastermind Solver</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
-  </head>
-  <body>
-    <div class="container my-4">
-      <h2>Mastermind Solver (1–9, no duplicates, 3 pegs)</h2>
-      <div class="mb-3">
-        <button id="start" class="btn btn-primary">Start</button>
-        <button id="reset" class="btn btn-secondary" style="display:none;">Reset</button>
-      </div>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Mastermind Solver (1–9, 3 pegs)</title>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+  <style>
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+  </style>
+</head>
+<body>
+  <div class="container my-4">
+    <h2 class="mb-3">Mastermind Solver (Digits 1–9, no duplicates, 3 pegs)</h2>
 
-      <div id="input-alert" class="alert alert-danger" style="display:none;"></div>
-
-      <!-- Current guess fixed position -->
-      <div id="cur-guess"></div>
-      <div id="cur-guess-alert" class="alert alert-danger" style="display:none;"></div>
-      <div id="success" class="alert alert-success" style="display:none;">
-        🎉 Solved! Click Reset to play again.
-      </div>
-
-      <hr>
-      <h4>Guess History</h4>
-      <table id="old-guesses-table" class="table table-striped table-hover" style="display:none;">
-        <thead>
-          <tr>
-            <th>Guess</th>
-            <th>@ (Right #, Right Place)</th>
-            <th># (Right #, Wrong Place)</th>
-            <th>Ignore</th>
-          </tr>
-        </thead>
-        <tbody id="old-guesses"></tbody>
-      </table>
+    <div class="mb-3">
+      <button id="start" class="btn btn-primary">Start</button>
+      <button id="reset" class="btn btn-secondary" style="display:none;">Reset</button>
     </div>
 
-    <!-- Templates -->
-    <script id="new-guess-template" type="text/x-handlebars-template">
-      <div class="guess mb-2"><b>Is it maybe {{guess}}?</b></div>
-      <div class="form-inline mb-2">
-        <label class="mr-2">@:</label>
-        <input type="number" min="0" step="1" max="{{numPegs}}" value="0" class="form-control bothCorrect mr-3" style="width:70px;">
-        <label class="mr-2">#:</label>
-        <input type="number" min="0" step="1" max="{{numPegs}}" value="0" class="form-control colorCorrect mr-3" style="width:70px;">
-        <button class="btn btn-primary mr-2 next-btn">Next</button>
-        <button class="btn btn-warning override-btn">Override Guess</button>
-      </div>
-    </script>
+    <div id="input-alert" class="alert alert-danger" style="display:none;"></div>
 
-    <script id="old-guess-template" type="text/x-handlebars-template">
-      <tr class="evidence">
-        <td>{{guess}}</td>
-        <td><input type="number" min="0" max="{{numPegs}}" value="{{bothCorrect}}" class="form-control form-control-sm bothCorrect-edit" style="width:60px;"></td>
-        <td><input type="number" min="0" max="{{numPegs}}" value="{{colorCorrect}}" class="form-control form-control-sm colorCorrect-edit" style="width:60px;"></td>
-        <td>
-          <div class="form-check">
-            <input type="checkbox" class="form-check-input ignore-row" id="ignore-{{index}}">
-            <label class="form-check-label" for="ignore-{{index}}">Ignore</label>
-          </div>
-        </td>
+    <!-- Current guess stays fixed here -->
+    <div id="cur-guess" class="mb-3"></div>
+    <div id="cur-guess-alert" class="alert alert-danger" style="display:none;"></div>
+    <div id="success" class="alert alert-success" style="display:none;">🎉 Solved! Click Reset to play again.</div>
+
+    <hr>
+    <h4>Guess History</h4>
+    <table id="old-guesses-table" class="table table-striped table-hover" style="display:none;">
+      <thead>
+      <tr>
+        <th>Guess</th>
+        <th>@ (Right #, Right Place)</th>
+        <th># (Right #, Wrong Place)</th>
+        <th>Ignore</th>
       </tr>
-    </script>
+      </thead>
+      <tbody id="old-guesses"></tbody>
+    </table>
+  </div>
 
-    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.1.2/handlebars.min.js"></script>
-    <script>
-      $(function(){
-        const $startBtn=$("#start"),
-              $resetBtn=$("#reset"),
-              $oldGuessesTable=$("#old-guesses-table"),
-              $playAreaOldGuesses=$("#old-guesses"),
-              $playAreaCurGuess=$("#cur-guess"),
-              $inputAlert=$("#input-alert"),
-              $curGuessAlert=$("#cur-guess-alert"),
-              $success=$("#success");
+  <!-- Templates -->
+  <script id="new-guess-template" type="text/x-handlebars-template">
+    <div class="guess mb-2 mono">Is it maybe <b>{{guess}}</b>?</div>
+    <div class="form-inline mb-2">
+      <label class="mr-2">@:</label>
+      <input type="number" min="0" max="{{numPegs}}" value="0" class="form-control bothCorrect mr-3" style="width:80px;">
+      <label class="mr-2">#:</label>
+      <input type="number" min="0" max="{{numPegs}}" value="0" class="form-control colorCorrect mr-3" style="width:80px;">
+      <button class="btn btn-primary mr-3 next-btn">Next</button>
+      <input type="text" class="form-control override-input mr-2 mono" placeholder="Override (e.g. 123)" style="width:150px;">
+      <button class="btn btn-warning override-btn">Override</button>
+    </div>
+  </script>
 
-        const newGuessTemplate=Handlebars.compile($("#new-guess-template").html());
-        const oldGuessTemplate=Handlebars.compile($("#old-guess-template").html());
+  <script id="old-guess-template" type="text/x-handlebars-template">
+    <tr class="evidence">
+      <td class="mono">{{guess}}</td>
+      <td><input type="number" min="0" max="{{numPegs}}" value="{{bothCorrect}}" class="form-control form-control-sm bothCorrect-edit" style="width:70px;"></td>
+      <td><input type="number" min="0" max="{{numPegs}}" value="{{colorCorrect}}" class="form-control form-control-sm colorCorrect-edit" style="width:70px;"></td>
+      <td>
+        <div class="form-check">
+          <input type="checkbox" class="form-check-input ignore-row" id="ignore-{{index}}">
+          <label class="form-check-label" for="ignore-{{index}}">Ignore</label>
+        </div>
+      </td>
+    </tr>
+  </script>
 
-        let globalGameState=null;
+  <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.1.2/handlebars.min.js"></script>
 
-        function generateAllGuesses(numPegs,nums){
-          if(numPegs===1) return nums.map(n=>[n]);
-          let res=[];
-          nums.forEach((n,i)=>{
-            let rem=nums.slice(0,i).concat(nums.slice(i+1));
-            generateAllGuesses(numPegs-1,rem).forEach(s=>res.push([n].concat(s)));
-          });
-          return res;
-        }
+  <script>
+    $(function(){
+      // ---------- DOM ----------
+      const $startBtn = $("#start");
+      const $resetBtn = $("#reset");
+      const $oldGuessesTable = $("#old-guesses-table");
+      const $playAreaOldGuesses = $("#old-guesses");
+      const $playAreaCurGuess = $("#cur-guess");
+      const $inputAlert = $("#input-alert");
+      const $curGuessAlert = $("#cur-guess-alert");
+      const $success = $("#success");
 
-        function judgeGuess(answer,guess){
-          let both=0,color=0;
-          let ansRem=[],gRem=[];
-          for(let i=0;i<answer.length;i++){
-            if(answer[i]===guess[i]) both++;
-            else {ansRem.push(answer[i]); gRem.push(guess[i]);}
-          }
-          ansRem.forEach(a=>{
-            let idx=gRem.indexOf(a);
-            if(idx!==-1){color++; gRem.splice(idx,1);}
-          });
-          return {bothCorrect:both,colorCorrect:color};
-        }
+      const newGuessTemplate = Handlebars.compile($("#new-guess-template").html());
+      const oldGuessTemplate = Handlebars.compile($("#old-guess-template").html());
 
-        function contradicts(guess,evidences){
-          for(let e of evidences){
-            let j=judgeGuess(guess,e.guess);
-            if(j.bothCorrect!==e.bothCorrect||j.colorCorrect!==e.colorCorrect) return true;
-          }
-          return false;
-        }
+      // ---------- Game config ----------
+      const NUM_PEGS = 3;
+      const DIGITS = ["1","2","3","4","5","6","7","8","9"]; // no duplicates allowed
 
-        function nextGuess(state,evidences){
-          while(state.possibleGuesses.length){
-            let idx=Math.floor(Math.random()*state.possibleGuesses.length);
-            let g=state.possibleGuesses.splice(idx,1)[0];
-            if(!contradicts(g,evidences)) return g;
-          }
-          return null;
-        }
+      let globalGameState = null;
 
-        function guessToString(g){return g.join("");}
-
-        function collectEvidence(){
-          let ev=[];
-          $playAreaOldGuesses.find(".evidence").each((i,row)=>{
-            let $row=$(row);
-            if($row.find(".ignore-row").is(":checked")) return;
-            let both=parseInt($row.find(".bothCorrect-edit").val());
-            let color=parseInt($row.find(".colorCorrect-edit").val());
-            ev.push({guess:$row.data("evidence").guess,bothCorrect:both,colorCorrect:color});
-          });
-          return ev;
-        }
-
-        function regenerateGuess(){
-          let evidence=collectEvidence();
-          globalGameState.possibleGuesses=generateAllGuesses(globalGameState.numPegs,globalGameState.colors);
-          let g=nextGuess(globalGameState,evidence);
-
-          $curGuessAlert.hide(); $success.hide();
-          if(!g){
-            $playAreaCurGuess.hide();
-            $curGuessAlert.text("No possible solutions. Check feedback or ignore rows.").show();
-          }else{
-            $playAreaCurGuess.html(newGuessTemplate({guess:guessToString(g),numPegs:globalGameState.numPegs}));
-            $playAreaCurGuess.find(".guess").data("guess",g);
-            $playAreaCurGuess.show();
-          }
-        }
-
-        function commitGuess(){
-          if($playAreaCurGuess.find("input").length===0) return;
-          let both=parseInt($playAreaCurGuess.find(".bothCorrect").val());
-          let color=parseInt($playAreaCurGuess.find(".colorCorrect").val());
-          if(both+color>globalGameState.numPegs){
-            $curGuessAlert.text("Invalid feedback: sum exceeds pegs.").show();
-            return;
-          }
-          if(both===globalGameState.numPegs){$success.show(); return;}
-
-          $oldGuessesTable.show();
-          let g=$playAreaCurGuess.find(".guess").data("guess");
-          let $row=$(oldGuessTemplate({
-            guess:guessToString(g),
-            bothCorrect:both,
-            colorCorrect:color,
-            numPegs:globalGameState.numPegs,
-            index:$playAreaOldGuesses.find(".evidence").length
-          }));
-          $row.data("evidence",{guess:g,bothCorrect:both,colorCorrect:color});
-          $playAreaOldGuesses.append($row);
-
-          regenerateGuess();
-        }
-
-        $startBtn.on("click",()=>{
-          $playAreaOldGuesses.html(""); $playAreaCurGuess.html("");
-          $inputAlert.hide(); $curGuessAlert.hide(); $success.hide();
-          let numPegs=3;
-          let nums=["1","2","3","4","5","6","7","8","9"];
-          if(nums.length<numPegs){$inputAlert.text("Not enough digits.").show();return;}
-          let possible=generateAllGuesses(numPegs,nums);
-          globalGameState={numPegs,colors:nums,allowDups:false,possibleGuesses:possible};
-          $startBtn.hide(); $resetBtn.show();
-          regenerateGuess();
+      // ---------- Helpers ----------
+      function generateAllGuesses(numPegs, nums){
+        if(numPegs === 1) return nums.map(n => [n]);
+        let res = [];
+        nums.forEach((n,i)=>{
+          let rem = nums.slice(0,i).concat(nums.slice(i+1));
+          generateAllGuesses(numPegs-1, rem).forEach(s => res.push([n].concat(s)));
         });
+        return res;
+      }
 
-        $resetBtn.on("click",()=>{
-          $playAreaOldGuesses.empty(); $playAreaCurGuess.empty();
-          $oldGuessesTable.hide(); $curGuessAlert.hide(); $success.hide();
-          $startBtn.show(); $resetBtn.hide();
+      function judgeGuess(answer, guess){
+        let both=0, color=0;
+        let ansRem=[], guessRem=[];
+        for(let i=0;i<answer.length;i++){
+          if(answer[i]===guess[i]) both++;
+          else { ansRem.push(answer[i]); guessRem.push(guess[i]); }
+        }
+        ansRem.forEach(a=>{
+          let idx = guessRem.indexOf(a);
+          if(idx!==-1){ color++; guessRem.splice(idx,1); }
         });
+        return {bothCorrect: both, colorCorrect: color};
+      }
 
-        $playAreaCurGuess.on("click",".next-btn",()=>commitGuess());
-        $playAreaCurGuess.on("click",".override-btn",()=>{
-          let val=prompt("Enter your override guess (e.g., 123):");
-          if(val && val.length===globalGameState.numPegs){
-            let g=val.split("");
-            $playAreaCurGuess.find(".guess").data("guess",g).html("<b>Is it maybe "+guessToString(g)+"?</b>");
+      function contradicts(guess, evidences){
+        for(let e of evidences){
+          let j = judgeGuess(guess, e.guess);
+          if(j.bothCorrect !== e.bothCorrect || j.colorCorrect !== e.colorCorrect) return true;
+        }
+        return false;
+      }
+
+      function guessToString(g){ return g.join(""); }
+
+      function collectEvidence(){
+        let ev=[];
+        $playAreaOldGuesses.find(".evidence").each((i,row)=>{
+          const $row = $(row);
+          if($row.find(".ignore-row").is(":checked")) return;
+          const both = parseInt($row.find(".bothCorrect-edit").val(),10) || 0;
+          const color = parseInt($row.find(".colorCorrect-edit").val(),10) || 0;
+          ev.push({
+            guess: $row.data("evidence").guess,
+            bothCorrect: both,
+            colorCorrect: color
+          });
+        });
+        return ev;
+      }
+
+      // ---------- Smarter suggestion ----------
+      function pickBestCandidate(candidates, confirmedSet){
+        if(candidates.length === 0) return null;
+
+        // Prefer 123 if available on first move (friendly starter)
+        const first = ["1","2","3"];
+        if(candidates.some(c => c.join("") === first.join(""))){
+          return first;
+        }
+
+        let best = null, bestScore = -Infinity;
+
+        for (const g of candidates){
+          const distinctConfirmed = g.filter(d => confirmedSet.has(d)).length;
+          const distinctTotal = new Set(g).size; // always 3 but keep formula generic
+          // reward confirmed digits more, then variety
+          const score = distinctConfirmed * 2 + distinctTotal;
+          if (score > bestScore){
+            bestScore = score;
+            best = g;
           }
-        });
+        }
+        return best;
+      }
 
-        $playAreaOldGuesses.on("change","input,checkbox",()=>regenerateGuess());
+      function regenerateGuess(){
+        const evidence = collectEvidence();
+
+        // ---- Step 1: build eliminated and confirmed sets from evidence ----
+        const eliminated = new Set();
+        const confirmed = new Set();
+
+        for (const ev of evidence){
+          const { bothCorrect, colorCorrect, guess } = ev;
+
+          if (bothCorrect === 0 && colorCorrect === 0){
+            // Entire guess digits are out
+            for (const d of guess) eliminated.add(d);
+          } else {
+            // At least one digit from this guess is in the code
+            for (const d of guess) if(!eliminated.has(d)) confirmed.add(d);
+          }
+        }
+
+        // ---- Step 2: restrict the digit pool ----
+        const allowedDigits = DIGITS.filter(d => !eliminated.has(d));
+
+        // If we pruned too hard (e.g., wrong feedback), keep at least 3 digits
+        if (allowedDigits.length < NUM_PEGS){
+          // fall back to original full digits (will result in "no possible" message if inconsistent)
+        }
+
+        // ---- Step 3: generate and filter candidates ----
+        let baseDigits = allowedDigits.length >= NUM_PEGS ? allowedDigits : DIGITS;
+        let candidates = generateAllGuesses(NUM_PEGS, baseDigits)
+          .filter(g => !contradicts(g, evidence));
+
+        // ---- Step 4: choose a good candidate quickly ----
+        const best = pickBestCandidate(candidates, confirmed);
+
+        $curGuessAlert.hide(); $success.hide();
+
+        if (!best){
+          $playAreaCurGuess.hide();
+          $curGuessAlert.text("No possible solutions under current feedback. Check your @/# entries or ignore conflicting rows.").show();
+          return;
+        }
+
+        // Render current guess (replace content, fixed position)
+        $playAreaCurGuess.html(newGuessTemplate({ guess: guessToString(best), numPegs: NUM_PEGS }));
+        $playAreaCurGuess.find(".guess").data("guess", best);
+        $playAreaCurGuess.show();
+
+        // Keep narrowed pool for potential future use (not strictly required)
+        globalGameState.possibleGuesses = candidates;
+      }
+
+      function commitGuess(){
+        $curGuessAlert.hide(); $success.hide();
+        if ($playAreaCurGuess.find("input").length === 0) return;
+
+        const both = parseInt($playAreaCurGuess.find(".bothCorrect").val(),10) || 0;
+        const color = parseInt($playAreaCurGuess.find(".colorCorrect").val(),10) || 0;
+
+        if (both + color > NUM_PEGS){
+          $curGuessAlert.text("Invalid feedback: @ + # cannot exceed number of pegs.").show();
+          return;
+        }
+
+        const g = $playAreaCurGuess.find(".guess").data("guess");
+        if (!Array.isArray(g) || g.length !== NUM_PEGS){
+          $curGuessAlert.text("No current guess to lock.").show();
+          return;
+        }
+
+        if (both === NUM_PEGS){
+          $success.show();
+          return;
+        }
+
+        // Add to history
+        $oldGuessesTable.show();
+        const $row = $(oldGuessTemplate({
+          guess: guessToString(g),
+          bothCorrect: both,
+          colorCorrect: color,
+          numPegs: NUM_PEGS,
+          index: $playAreaOldGuesses.find(".evidence").length
+        }));
+        $row.data("evidence", { guess: g, bothCorrect: both, colorCorrect: color });
+        $playAreaOldGuesses.append($row);
+
+        // Generate next suggestion
+        regenerateGuess();
+      }
+
+      // ---------- Events ----------
+      $startBtn.on("click", () => {
+        $playAreaOldGuesses.empty();
+        $playAreaCurGuess.empty();
+        $oldGuessesTable.hide();
+        $inputAlert.hide();
+        $curGuessAlert.hide();
+        $success.hide();
+
+        // Initialize state
+        globalGameState = {
+          numPegs: NUM_PEGS,
+          colors: DIGITS.slice(),
+          allowDups: false,
+          possibleGuesses: generateAllGuesses(NUM_PEGS, DIGITS)
+        };
+
+        $startBtn.hide();
+        $resetBtn.show();
+
+        regenerateGuess();
       });
-    </script>
-  </body>
+
+      $resetBtn.on("click", () => {
+        globalGameState = null;
+        $playAreaOldGuesses.empty();
+        $playAreaCurGuess.empty();
+        $oldGuessesTable.hide();
+        $curGuessAlert.hide();
+        $success.hide();
+        $startBtn.show().text("Start");
+        $resetBtn.hide();
+      });
+
+      // Lock current guess with feedback
+      $playAreaCurGuess.on("click", ".next-btn", commitGuess);
+
+      // Per-round override: only changes the current “Is it maybe …”
+      $playAreaCurGuess.on("click", ".override-btn", () => {
+        const $input = $playAreaCurGuess.find(".override-input");
+        const val = ($input.val() || "").trim();
+
+        if (val.length !== NUM_PEGS || !/^[1-9]+$/.test(val)){
+          alert("Enter "+NUM_PEGS+" unique digits (1–9). Example: 123");
+          return;
+        }
+        const arr = val.split("");
+        if (new Set(arr).size !== NUM_PEGS){
+          alert("No duplicates allowed.");
+          return;
+        }
+
+        // Replace only the current round's guess
+        $playAreaCurGuess.find(".guess").data("guess", arr)
+          .html('Is it maybe <b>'+val+'</b>?');
+      });
+
+      // Any edit in history triggers recalculation
+      $playAreaOldGuesses.on("change", "input[type='number'], input[type='checkbox']", regenerateGuess);
+    });
+  </script>
+</body>
 </html>
